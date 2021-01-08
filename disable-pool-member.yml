@@ -1,0 +1,50 @@
+---
+- name: "Disabling a pool member"
+  hosts: lb
+  gather_facts: false
+  connection: local
+
+  tasks:
+  - name: Setup provider
+    set_fact:
+      provider:
+        server: "{{private_ip}}"
+        user: "{{ansible_user}}"
+        password: "{{ansible_ssh_pass}}"
+        server_port: "443"
+        validate_certs: "no"
+  - name: Query BIG-IP Facts
+    bigip_device_info:
+      provider: "{{provider}}"
+      gather_subset:
+      - ltm-pools 
+    register: device_facts
+  
+#  - name: Display pools
+#    debug:
+#      var: device_facts.ltm_pools
+
+#  - name: "View complete output"
+#    debug: "msg={{device_facts}}"
+
+  - name: "Show members belonging to pool"
+    debug: "msg={{item}}"
+    loop: "{{device_facts.ltm_pools | json_query(query_string)}}"
+    vars:
+     query_string: "[?name=='http_pool'].members[*].name[]"
+
+  - name: Force pool member offline
+    bigip_pool_member:
+#      state: forced_offline
+      state: enabled
+      pool: http_pool
+      partition: Common
+      aggregate: 
+      - host: host1
+        port: 80
+      - host: host2
+        port: 80
+      replace_all_with: yes
+      provider: "{{provider}}"
+    delegate_to: localhost
+
